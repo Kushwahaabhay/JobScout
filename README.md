@@ -48,7 +48,9 @@ Browser (key in memory)
   └─ lib/client/pipeline.ts   Search → Agent → Fetch → Deduplicate, with per-stage progress
        ├─ POST /api/connect   TinyFish Search (1 tiny query) → connection test
        ├─ POST /api/search    TinyFish Search  GET  https://api.search.tinyfish.ai
-       ├─ POST /api/extract   TinyFish Agent   POST https://agent.tinyfish.ai/v1/automation/run   (one source per call)
+       ├─ POST /api/extract         TinyFish Agent  POST .../v1/automation/run-async   (starts one run, returns run_id)
+       ├─ POST /api/extract/status  polls GET .../v1/runs/{id} until COMPLETED / FAILED
+       ├─ POST /api/extract/cancel  cancels a run that hit the client deadline
        └─ POST /api/enrich    TinyFish Fetch   POST https://api.fetch.tinyfish.ai                  (≤10 URLs per call)
 ```
 
@@ -61,8 +63,10 @@ Implemented against the official docs (docs.tinyfish.ai): auth header `X-API-Key
 Agent body `url`, `goal`, `output_schema` (documented JSON-Schema subset, `nullable` instead of type arrays),
 `agent_config.max_duration_seconds`, with `COMPLETED`/`FAILED` status and `error.code`.
 
-Why the orchestration runs from the browser: one agent run can take minutes, so each source is its own request.
-That stays inside serverless time limits, lets one failed source not sink the rest, and makes the progress bar honest.
+Why the orchestration runs from the browser: an Agent run can take a minute or more. Instead of holding one HTTP request open
+(which hits proxy/serverless timeouts), each source is started with the **async** endpoint and polled every 3 s with short requests.
+Each source has a 150 s deadline (TinyFish is also told `max_duration_seconds: 120`); on timeout the run is cancelled and that
+source is reported as failed while the others continue. The Agent goal asks it to read listing pages only, which keeps runs short.
 
 ### What each API contributes
 
@@ -90,8 +94,7 @@ It is hard-disabled when `NODE_ENV=production`.
 ## Deployment (Vercel)
 
 1. Push the repo, import it in Vercel, keep defaults. **Do not add any TinyFish key as an env var.** Set `AUTH_SECRET` and `JOBSCOUT_USERS` (and optionally `NEXT_PUBLIC_DEMO_HINT`) in the project environment variables.
-2. Agent route sets `maxDuration = 300`; that needs a plan that allows it (Pro). On Hobby lower `maxDuration` in
-   `app/api/extract/route.ts` and `maxDurationSeconds` in `lib/tinyfish/agent.ts` to fit your limit.
+2. No long-running function is needed: the Agent routes only start/poll/cancel (each < 30 s). The Fetch route allows up to 150 s.
 3. Optionally set `JOBSCOUT_MAX_SOURCES` / `JOBSCOUT_MAX_DETAIL_FETCHES`.
 
 ## Demo script (≈3 min)

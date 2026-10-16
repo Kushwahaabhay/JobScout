@@ -4,7 +4,8 @@ import type {
   EnrichResponse,
   ErrorBody,
   ExtractRequest,
-  ExtractResponse,
+  ExtractStartResponse,
+  ExtractStatusResponse,
   SearchRequest,
   SearchResponse,
 } from "../types";
@@ -61,6 +62,11 @@ async function post<T>(path: string, apiKey: string, body: unknown, signal?: Abo
 export const api = {
   connect: (key: string, signal?: AbortSignal) => post<ConnectResponse>("/api/connect", key, {}, signal),
   search: (key: string, body: SearchRequest, signal?: AbortSignal) => post<SearchResponse>("/api/search", key, body, signal),
-  extract: (key: string, body: ExtractRequest, signal?: AbortSignal) => post<ExtractResponse>("/api/extract", key, body, signal),
+  extractStart: (key: string, body: ExtractRequest, signal?: AbortSignal) =>
+    post<ExtractStartResponse>("/api/extract", key, body, signal),
+  extractStatus: (key: string, run_id: string, signal?: AbortSignal) =>
+    post<ExtractStatusResponse>("/api/extract/status", key, { run_id }, signal),
+  extractCancel: (key: string, run_id: string) =>
+    post<{ ok: true }>("/api/extract/cancel", key, { run_id }).catch(() => undefined),
   enrich: (key: string, body: EnrichRequest, signal?: AbortSignal) => post<EnrichResponse>("/api/enrich", key, body, signal),
 };

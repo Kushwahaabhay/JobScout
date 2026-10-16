@@ -9,6 +9,7 @@ import type {
   SourceReport,
 } from "../types";
 import { ApiError, api } from "./api";
+import { runAgentOnSource } from "./agent-run";
 
 export type Stage = "search" | "agent" | "fetch" | "dedupe";
 export type StageState = "idle" | "running" | "done" | "error" | "skipped";
@@ -30,7 +31,7 @@ export interface PipelineResult {
   fatal?: string;
 }
 
-const AGENT_CONCURRENCY = 3;
+const AGENT_CONCURRENCY = 5; // sources are capped at 5 by default, so they all run at once
 
 export const initialProgress = (): PipelineProgress => ({
   stages: { search: "idle", agent: "idle", fetch: "idle", dedupe: "idle" },
@@ -117,7 +118,7 @@ export async function runPipeline(args: {
     src.status = "running";
     emit();
     try {
-      const r = await api.extract(apiKey, { criteria, source: src }, signal);
+      const r = await runAgentOnSource(api, apiKey, { criteria, source: src }, { signal });
       const jobs = r.jobs.map((j) => normalizeJob(j, src, fetchedAt)).filter((j): j is Job => j !== null);
       src.jobs_found = jobs.length;
       src.status = jobs.length ? "ok" : "empty";

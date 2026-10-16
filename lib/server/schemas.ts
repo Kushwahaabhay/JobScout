@@ -45,3 +45,5 @@ export const enrichRequestSchema = z.object({
     .min(1)
     .max(10),
 });
+
+export const runRefSchema = z.object({ run_id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/) });

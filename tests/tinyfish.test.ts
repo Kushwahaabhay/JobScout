@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SearchCriteria } from "@/lib/types";
 import { tinyfishSearch } from "@/lib/tinyfish/search";
 import { tinyfishFetch } from "@/lib/tinyfish/fetch";
-import { tinyfishAgentExtract } from "@/lib/tinyfish/agent";
+import { cancelAgentRun, getAgentRun, startAgentRun } from "@/lib/tinyfish/agent";
 import { TinyFishError } from "@/lib/tinyfish/http";
 
 const crit: SearchCriteria = { role: "Dev", location: "", seniority: "any", employment: "any", keywords: [] };
@@ -43,12 +43,32 @@ describe("TinyFish clients (mocked transport)", () => {
     await expect(tinyfishFetch("k", Array(11).fill("https://a.com"), "p", f as never)).rejects.toThrow();
   });
 
-  it("agent: FAILED runs throw; COMPLETED runs return parsed jobs", async () => {
-    const bad = vi.fn().mockResolvedValue(json({ run_id: "r", status: "FAILED", error: { code: "SITE_BLOCKED", message: "x" } }));
-    await expect(tinyfishAgentExtract("k-12345678", "https://a.com", crit, { fetchImpl: bad as never })).rejects.toMatchObject({ code: "SITE_BLOCKED" });
-    const ok = vi.fn().mockResolvedValue(json({ run_id: "r", status: "COMPLETED", num_of_steps: 4, result: { jobs: [{ title: "A" }] } }));
-    const r = await tinyfishAgentExtract("k-12345678", "https://a.com", crit, { fetchImpl: ok as never });
-    expect(r.jobs).toHaveLength(1);
-    expect(r.steps).toBe(4);
+  it("agent: starts an async run (run-async) and returns the run id immediately", async () => {
+    const f = vi.fn().mockResolvedValue(json({ run_id: "run_1", error: null }));
+    expect(await startAgentRun("k-12345678", "https://a.com", crit, f as never)).toBe("run_1");
+    const [url, init] = f.mock.calls[0];
+    expect(String(url)).toBe("https://agent.tinyfish.ai/v1/automation/run-async");
+    const body = JSON.parse(init.body);
+    expect(body.url).toBe("https://a.com");
+    expect(body.agent_config.max_duration_seconds).toBeLessThanOrEqual(120);
+    expect(body.output_schema.properties.jobs).toBeDefined();
+    const none = vi.fn().mockResolvedValue(json({ run_id: null, error: { code: "INTERNAL_ERROR", message: "x" } }));
+    await expect(startAgentRun("k-12345678", "https://a.com", crit, none as never)).rejects.toMatchObject({ code: "INTERNAL_ERROR" });
+  });
+
+  it("agent: polls run state - running, completed, failed", async () => {
+    const run = vi.fn().mockResolvedValue(json({ status: "RUNNING" }));
+    expect(await getAgentRun("k-12345678", "run_1", run as never)).toMatchObject({ state: "running" });
+    expect(String(run.mock.calls[0][0])).toContain("/v1/runs/run_1");
+    const ok = vi.fn().mockResolvedValue(json({ status: "COMPLETED", num_of_steps: 4, result: { jobs: [{ title: "A" }] } }));
+    expect(await getAgentRun("k-12345678", "run_1", ok as never)).toMatchObject({ state: "done", steps: 4 });
+    const bad = vi.fn().mockResolvedValue(json({ status: "FAILED", error: { code: "SITE_BLOCKED", message: "x" } }));
+    expect(await getAgentRun("k-12345678", "run_1", bad as never)).toMatchObject({ state: "failed", code: "SITE_BLOCKED" });
+    await expect(getAgentRun("k-12345678", "../evil", run as never)).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
+  it("agent: cancel never throws", async () => {
+    const f = vi.fn().mockRejectedValue(new Error("boom"));
+    await expect(cancelAgentRun("k-12345678", "run_1", f as never)).resolves.toBeUndefined();
   });
 });

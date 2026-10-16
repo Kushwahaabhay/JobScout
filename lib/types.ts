@@ -105,12 +105,13 @@ export interface ExtractRequest {
   criteria: SearchCriteria;
   source: DiscoveredSource;
 }
-export interface ExtractResponse {
-  jobs: RawJob[];
-  run_id: string | null;
-  steps: number | null;
-  dropped: number;
+export interface ExtractStartResponse {
+  run_id: string;
 }
+export type ExtractStatusResponse =
+  | { state: "running"; status: string }
+  | { state: "done"; jobs: RawJob[]; dropped: number; steps: number | null }
+  | { state: "failed"; code: string; message: string; retry_after: number | null };
 
 export interface EnrichRequest {
   jobs: Array<{ id: string; title: string; apply_url: string }>;
