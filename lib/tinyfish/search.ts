@@ -63,7 +63,7 @@ export function buildQueries(c: SearchCriteria): Array<{ query: string; include_
 }
 
 const AGGREGATOR_NOISE =
-  /(linkedin\.com|indeed\.com|glassdoor\.com|ziprecruiter\.com|reddit\.com|youtube\.com|facebook\.com|quora\.com|medium\.com)$/i;
+  /(linkedin\.com|indeed\.com|glassdoor\.com|ziprecruiter\.com|reddit\.com|youtube\.com|facebook\.com|instagram\.com|twitter\.com|x\.com|tiktok\.com|quora\.com|medium\.com|wikipedia\.org|amazon\.com|flipkart\.com|naukri\.com|monster\.com|shine\.com|timesjobs\.com)$/i;
 
 export function hostOf(url: string): string | null {
   try {
